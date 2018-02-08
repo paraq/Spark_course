@@ -1,0 +1,80 @@
+import org.apache.spark._
+import org.apache.spark.SparkContext._
+import org.apache.log4j.Logger
+import org.apache.log4j.Level
+import java.io._
+import java.util.Locale
+import org.apache.commons.lang3.StringUtils
+
+object AnalyzeTwitters
+{
+	// Gets Language's name from its code
+	def getLangName(code: String) : String =
+	{
+		return new Locale(code).getDisplayLanguage(Locale.ENGLISH)
+	}
+	
+	
+	
+	def main(args: Array[String]) 
+	{
+		val inputFile = args(0)
+		val conf = new SparkConf().setAppName("AnalyzeTwitters")
+		val sc = new SparkContext(conf)
+		
+		// Comment these two lines if you want more verbose messages from Spark
+		Logger.getLogger("org").setLevel(Level.OFF);
+		Logger.getLogger("akka").setLevel(Level.OFF);
+		
+		val t0 = System.currentTimeMillis
+		// Add your code here
+		
+		val Inpage = sc.textFile(inputFile) //base RDD
+		//=====================================================================Transformations============================================================================
+		val header = Inpage.first() // read first/header line from file
+		val page = Inpage.filter(row => row != header)// filter out first line from the file 
+
+		val map1=(page).map(line => line.split(",")).map(line=> (line(4),(line(5).toInt,line(6).toInt,line(1),line(2),line(8))))
+		/*First map tranformation will split each row by " "(space delimitor) and corresponding line(0) means data from first column.
+		  Second Map will convert data into required key-value tuple format of (IDOfTweet),(MaxRetweetCount,MinRetweetCount,Lang,Langcode,text) => IDOfTweet as the key
+		*/
+
+
+		val reduce_map1= map1.reduceByKey((x,y)=>(math.max(x._1, y._1),math.min(x._2, y._2),y._3,y._4,y._5)).map{case(tid,(max,min,lan,co,text))=>(co,lan,tid,max-min+1,text)}.sortBy(_._4,false)
+		/* We will apply reduce functions on (MaxRetweetCount,MinRetweetCount,Lang,Langcode,text) 
+		  max of MaxRetweetCount => math.max(x._1, y._1) // this will return max of MaxRetweetCount for a particulat IDOfTweet 
+		  min of MinRetweetCount => math.min(x._2, y._2) // this will return min of MinRetweetCount for a particulat IDOfTweet
+		  other elements Lang,Langcode,text will select current values
+		  map is used to convert format to reduce_map1=> (langcode,langname,IDOfTweet,RetweetCount,text)
+		  sortBy(_._4,false) will sort according to RetweetCount, false for descending order
+		*/		
+
+
+		val map2=reduce_map1.map{case(co,lan,tid,total,text)=>(co,total)}
+		val reduce_map2=map2.reduceByKey(_ + _).map{case(a,(b))=>(a,b)}
+		/* map2 is used to find out maxretweet count of the particular language
+		   map transform is used to convert tuple to (languagecode,RetweetCount) where languagecode is the key 
+	           map2 is reduced to get TotalRetweetCount by (_ + _). Further map is used to convert such that reduce_map2 => (languagecode,TotalRetweetsInThatLang) 	
+		*/
+		val joined= reduce_map1.map{case(a,b,c,d,e) => (a,(b,c,d,e))}.join(reduce_map2).map{case (co,((lang,id,retotal,text),total))=>(lang,co,total,id,retotal,text)}
+		// Map transformations are used for both reduce_map1 and reduce_map2 to define langcode as key and further they are joined together
+		
+		val filter=joined.filter{case(lang,co,total,id,retotal,text) => retotal >1 }.sortBy(_._3,false)
+		// filter is used to filterout data where RetweetCount ==1 
+		// sortBy(_._3,false) will sort according to TotalRetweetsInThatLang, false for descending order
+		
+		
+		// ======================================================================Writing to the file========================================================================== 
+		val file = new FileOutputStream("part3.txt");//name of outputfile
+		val bw = new BufferedWriter(new OutputStreamWriter(file, "UTF-8"))
+		bw.write("Language,Languagecode,TotalRetweetsInThatLang,IDOfTweet,RetweetCount,Text\n")
+		bw.write(filter.collect.mkString("\n")) //convert to string for writing to a file 
+		bw.close	//close the buffer
+
+
+		//=======================================================================Runtime display============================================================================		
+		val et = (System.currentTimeMillis - t0) / 1000
+		System.err.println("Done!\nTime taken = %d mins %d secs".format(et / 60, et % 60))
+	}
+}
+
