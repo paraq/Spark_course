@@ -94,10 +94,10 @@ object Twitterstats
 	def main(args: Array[String]) 
 	{
 		// Configure Twitter credentials
-		val apiKey = " MnVNvmaFsXDsynk4itBhQYIkB"
-		val apiSecret = "JFzxiXxNskhiE7D8t9Pn8qQbraDu8Qz10f2auhXIYEafqsOTXs"
-		val accessToken = " 784442412043296768-zrWqfEIy4zXF9aij0Tc9GaDo2Kiswiu"
-		val accessTokenSecret = " 8XaAqR9LOoJh7sKtkxqcNitdrA29qb6zOdaMBDKWNiaOU"
+		val apiKey = "..................."
+		val apiSecret = ".................."
+		val accessToken = " ...................."
+		val accessTokenSecret = " ......................."
 		//authentication of twitter application
 		Helper.configureTwitterCredentials(apiKey, apiSecret, accessToken, accessTokenSecret)
 		
